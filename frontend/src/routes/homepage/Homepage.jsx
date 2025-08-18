@@ -9,12 +9,12 @@ const Homepage=()=>{
         <div className='homepage'>
             <img src="/orbital.png" alt="" className='orbital' />
             <div className="left">
-                <h1>CanBot</h1>
+                <h1>QueryNest</h1>
                 {/* <h2>Unlock Intelligent Academic & Administrative Support</h2>
                 <h3>
                 CanBot is a smart AI assistant powered by Retrieval-Augmented Generation (RAG), specifically designed to transform academic and administrative workflows in educational institutions.
                 </h3> */}
-                <h2>Can bot is a intelligent chatbot here to answer all your queries!</h2>
+                <h2>QueryNest is a intelligent chatbot here to answer all your queries!</h2>
                 <h3>Start your conversation now!</h3>
                 <Link to='/dashboard'>Get Started</Link>
             </div>

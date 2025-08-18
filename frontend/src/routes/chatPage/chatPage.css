@@ -5,7 +5,7 @@
   align-items: center;
   position: relative;
 
-  .wrapper{
+.wrapper{
     flex:1;
     overflow: scroll;
     width: 100%;

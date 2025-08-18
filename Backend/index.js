@@ -93,15 +93,17 @@ app.post("/api/chats", ClerkExpressRequireAuth(), async (req, res) => {
   }
 });
 
-app.get("/api/userchats", ClerkExpressRequireAuth(), async (req, res) => {
+app.get("/api/userchats",ClerkExpressRequireAuth(), async (req, res) => {
   const userId = req.auth.userId;
+  console.log(userId);
 
   try {
     const userChats = await UserChats.find({ userId });
      if (!userChats) {
       return res.status(200).send([]); // 👈 Return an empty array if no chats exist yet
     }
-    res.status(200).send(userChats.chats);
+    res.status(200).send(userChats);
+
   } catch (err) {
     console.log(err);
     res.status(500).send("Error fetching userchats!");

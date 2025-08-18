@@ -18,7 +18,7 @@ const RootLayout = () => {
           <header>
             <Link to="/" className="logo">
               <img src="/logo.png" alt="" />
-              <span>CanBot</span>
+              <span>QueryNest</span>
             </Link>
             <div className="user">
               <SignedIn>

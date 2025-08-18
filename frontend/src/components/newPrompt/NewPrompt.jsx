@@ -70,31 +70,32 @@ const NewPrompt = ({ data }) => {
       console.log(err);
     },
   });
-
+  function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
   const add = async (text, isInitial) => {
-    if (!isInitial) setQuestion(text);
+  if (!isInitial) setQuestion(text);
 
-    try {
-      const result = await chat.sendMessageStream(
-        Object.entries(img.aiData).length ? [img.aiData, text] : [text]
-      );
-      let accumulatedText = "";
-      let chunklast=""
-      for await (const chunk of result.stream) {
-        const chunkText = chunk.text();
-        console.log(chunkText);
-        accumulatedText += chunkText;
-        chunklast=chunkText;
-        setAnswer(prev => prev + chunkText);
-      }
+  setAnswer("");
+
+  try {
+    const result = await chat.sendMessageStream(
+      Object.entries(img.aiData).length ? [img.aiData, text] : [text]
+    );
+
+    let accumulatedText = "";
+    for await (const chunk of result.stream) {
+      const chunkText = chunk.text();
       accumulatedText += chunkText;
-      setAnswer(accumulatedText);
-
-      mutation.mutate();
-    } catch (err) {
-      console.log(err);
+      setAnswer(accumulatedText); 
+      await delay(5);
     }
-  };
+    console.log(accumulatedText);
+    mutation.mutate();
+  } catch (err) {
+    console.log(err);
+  }
+};
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -105,7 +106,6 @@ const NewPrompt = ({ data }) => {
     add(text, false);
   };
 
-  // IN PRODUCTION WE DON'T NEED IT
   const hasRun = useRef(false);
 
   useEffect(() => {
@@ -119,7 +119,7 @@ const NewPrompt = ({ data }) => {
 
   return (
     <>
-      {/* ADD NEW CHAT */}
+    
       {img.isLoading && <div className="">Loading...</div>}
       {img.dbData?.filePath && (
         <IKImage
