@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import "./newPrompt.css";
+import { useAuth } from "@clerk/clerk-react";
 import Upload from "../upload/Upload";
 import { IKImage } from "imagekitio-react";
 import model from "../../lib/gemini";
 import Markdown from "react-markdown";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
+const { getToken } = useAuth();
 const NewPrompt = ({ data }) => {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
@@ -43,6 +45,7 @@ const NewPrompt = ({ data }) => {
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
         },
         body: JSON.stringify({
           question: question.length ? question : undefined,
