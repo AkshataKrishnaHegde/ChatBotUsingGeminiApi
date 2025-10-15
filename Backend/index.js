@@ -48,7 +48,7 @@ app.get("/api/upload", (req, res) => {
   res.send(result);
 });
 
-app.post("/api/chats", ClerkExpressRequireAuth(), async (req, res) => {
+app.post("/api/chats", async (req, res) => {
   const userId = req.auth.userId;
   const { text } = req.body;
 
@@ -99,7 +99,7 @@ app.post("/api/chats", ClerkExpressRequireAuth(), async (req, res) => {
   }
 });
 
-app.get("/api/userchats",ClerkExpressRequireAuth(), async (req, res) => {
+app.get("/api/userchats", async (req, res) => {
   const userId = req.auth.userId;
   console.log(userId);
 
@@ -116,7 +116,7 @@ app.get("/api/userchats",ClerkExpressRequireAuth(), async (req, res) => {
   }
 });
 
-app.get("/api/chats/:id", ClerkExpressRequireAuth(), async (req, res) => {
+app.get("/api/chats/:id", async (req, res) => {
   const userId = req.auth.userId;
 
   try {
@@ -129,7 +129,7 @@ app.get("/api/chats/:id", ClerkExpressRequireAuth(), async (req, res) => {
   }
 });
 
-app.put("/api/chats/:id", ClerkExpressRequireAuth(), async (req, res) => {
+app.put("/api/chats/:id", async (req, res) => {
   const userId = req.auth.userId;
 
   const { question, answer, img } = req.body;
