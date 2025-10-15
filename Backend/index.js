@@ -15,7 +15,7 @@ const __dirname = path.dirname(__filename);
 
 app.use(
   cors({
-    origin: "*",
+    origin: process.CLIENT_URL,
     credentials: true,
   })
 );
