@@ -22,12 +22,15 @@ app.use(
 
 app.use(express.json());
 
+let isConnected = false;
 const connect = async () => {
+  if (isConnected) return;
   try {
     await mongoose.connect(process.env.MONGO);
+    isConnected = true;
     console.log("Connected to MongoDB");
   } catch (err) {
-    console.log(err);
+    console.error(err);
   }
 };
 
