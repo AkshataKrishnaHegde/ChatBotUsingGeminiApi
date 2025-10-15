@@ -30,7 +30,7 @@ const connect = async () => {
     isConnected = true;
     console.log("Connected to MongoDB");
   } catch (err) {
-    console.error(err);
+    console.log(err);
   }
 };
 
