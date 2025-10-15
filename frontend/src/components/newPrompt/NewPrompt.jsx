@@ -38,7 +38,7 @@ const NewPrompt = ({ data }) => {
 
   const mutation = useMutation({
     mutationFn: () => {
-      return fetch(`{import.meta.env}/api/chats/${data._id}`, {
+      return fetch(`${import.meta.env}/api/chats/${data._id}`, {
         method: "PUT",
         credentials: "include",
         headers: {
