@@ -1,64 +1,166 @@
+import { useEffect, useRef, useState } from "react";
+import "./newPrompt.css";
+
+import Upload from "../upload/Upload";
+import { IKImage } from "imagekitio-react";
+import model from "../../lib/gemini";
+import Markdown from "react-markdown";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import "./dashboardPage.css";
-import { useNavigate } from "react-router-dom";
 import { useAuth } from "@clerk/clerk-react";
-import { useState, useEffect } from "react";
 
-const DashboardPage = () => {
-  const queryClient = useQueryClient();
-  const navigate = useNavigate();
+const NewPrompt = ({ data }) => {
+  const [question, setQuestion] = useState("");
+  const [answer, setAnswer] = useState("");
+  const [img, setImg] = useState({
+    isLoading: false,
+    error: "",
+    dbData: {},
+    aiData: {},
+  });
+
   const { getToken } = useAuth();
+  const queryClient = useQueryClient();
 
-  const [token, setToken] = useState(null);
+  const chat = model.startChat({
+    history:
+      data?.history?.map(({ role, parts }) => ({
+        role,
+        parts: [{ text: parts[0]?.text }],
+      })) || [],
+    generationConfig: {},
+  });
 
-  // Fetch token on component mount
+  const endRef = useRef(null);
+  const formRef = useRef(null);
+
   useEffect(() => {
-    async function fetchToken() {
-      const t = await getToken();
-      setToken(t);
-    }
-    fetchToken();
-  }, [getToken]);
+    endRef.current.scrollIntoView({ behavior: "smooth" });
+  }, [data, question, answer, img.dbData]);
 
   const mutation = useMutation({
-    mutationFn: (text) => {
-      return fetch(`${import.meta.env.VITE_API_URL}/api/chats`, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ text }),
-      }).then((res) => res.json());
+    // FIX 1: Accept arguments here instead of reading from state
+    mutationFn: async ({ questionToSave, answerToSave }) => {
+      const token = await getToken();
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL}/api/chats/${data._id}`,
+        {
+          method: "PUT",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            // FIX 2: Use the arguments directly
+            question: questionToSave,
+            answer: answerToSave,
+            img: img.dbData?.filePath || undefined,
+          }),
+        }
+      );
+
+      // FIX 3: Add better response handling (prevents crash on empty response)
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || "Failed to update chat");
+      }
+
+      const contentType = res.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        return res.json();
+      }
+      return null; // Successfully updated, but no JSON response
     },
-    onSuccess: (id) => {
-      queryClient.invalidateQueries({ queryKey: ["userChats"] });
-      navigate(`/dashboard/chats/${id}`);
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["chat", data._id] }).then(() => {
+        formRef.current.reset();
+        setQuestion("");
+        setAnswer("");
+        setImg({ isLoading: false, error: "", dbData: {}, aiData: {} });
+      });
+    },
+    onError: (err) => {
+      console.error(err);
+      // You could set an error state here to show the user
     },
   });
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    const text = e.target.text.value;
-    if (!text || !token) return; // wait for token to be loaded
-    mutation.mutate(text);
+  function delay(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  const add = async (text, isInitial) => {
+    if (!isInitial) setQuestion(text);
+    setAnswer("");
+
+    try {
+      const result = await chat.sendMessageStream(
+        Object.entries(img.aiData).length ? [img.aiData, text] : [text]
+      );
+
+      let accumulatedText = "";
+      for await (const chunk of result.stream) {
+        accumulatedText += chunk.text();
+        setAnswer(accumulatedText);
+      }
+
+      if (data?._id) {
+        // FIX 4: Pass the variables directly to the mutation
+        mutation.mutate({
+          questionToSave: text,
+          answerToSave: accumulatedText,
+        });
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const text = e.target.text.value;
+    if (!text) return;
+    add(text, false);
+  };
+
+  const hasRun = useRef(false);
+  useEffect(() => {
+    if (!hasRun.current) {
+      if (data?.history?.length === 1) {
+        add(data.history[0].parts[0].text, true);
+      }
+      hasRun.current = true;
+    }
+  }, [data]); // Added `data` as a dependency
+
   return (
-    <div className="dashboardPage">
-      {/* your JSX here */}
-      <div className="formContainer">
-        <form onSubmit={handleSubmit}>
-          <input type="text" name="text" placeholder="Ask me anything..." />
-          <button>
-            <img src="/arrow.png" alt="" />
-          </button>
-        </form>
-      </div>
-    </div>
+    <>
+      {img.isLoading && <div>Loading...</div>}
+      {img.dbData?.filePath && (
+        <IKImage
+          urlEndpoint={import.meta.env.VITE_IMAGE_KIT_ENDPOINT}
+          path={img.dbData?.filePath}
+          width="380"
+          transformation={[{ width: 380 }]}
+        />
+      )}
+      {question && <div className="message user">{question}</div>}
+      {answer && (
+        <div className="message">
+          <Markdown>{answer}</Markdown>
+        </div>
+      )}
+      <div className="endChat" ref={endRef}></div>
+      <form className="newForm" onSubmit={handleSubmit} ref={formRef}>
+        <Upload setImg={setImg} />
+        <input id="file" type="file" multiple={false} hidden />
+        <input type="text" name="text" placeholder="Ask anything..." />
+        <button>
+          <img src="/arrow.png" alt="" />
+        </button>
+      </form>
+    </>
   );
 };
 
-export default DashboardPage;
-
+export default NewPrompt;
