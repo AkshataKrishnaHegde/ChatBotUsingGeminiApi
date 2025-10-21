@@ -71,28 +71,28 @@ const NewPrompt = ({ data }) => {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  const add = async (text, isInitial) => {
-    if (!isInitial) setQuestion(text);
-    setAnswer("");
+ const add = async (text, isInitial) => {
+  if (!isInitial) setQuestion(text);
+  setAnswer("");
 
-    try {
-      const result = await chat.sendMessageStream(
-        Object.entries(img.aiData).length ? [img.aiData, text] : [text]
-      );
+  try {
+    const result = await chat.sendMessageStream(
+      Object.entries(img.aiData).length ? [img.aiData, text] : [text]
+    );
 
-      let accumulatedText = "";
-      for await (const chunk of result.stream) {
-        const chunkText = chunk.text();
-        accumulatedText += chunkText;
-        setAnswer(accumulatedText);
-        await delay(5);
-      }
-
-      mutation.mutate();
-    } catch (err) {
-      console.error(err);
+    let accumulatedText = "";
+    for await (const chunk of result.stream) {
+      accumulatedText += chunk.text();
+      setAnswer(accumulatedText);
     }
-  };
+
+    if (data?._id) {
+      mutation.mutate(); // only if chat exists
+    }
+  } catch (err) {
+    console.error(err);
+  }
+};
 
   const handleSubmit = async (e) => {
     e.preventDefault();
