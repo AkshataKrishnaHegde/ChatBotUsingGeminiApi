@@ -8,7 +8,6 @@ import Markdown from "react-markdown";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@clerk/clerk-react";
 
-
 const NewPrompt = ({ data }) => {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
@@ -19,15 +18,16 @@ const NewPrompt = ({ data }) => {
     aiData: {},
   });
 
-  const chat = model.startChat({
-   history: data?.history?.map(({ role, parts }) => ({
-  role,
-  parts: [{ text: parts[0]?.text }],
-})) || [],
+  const { getToken } = useAuth(); 
+  const queryClient = useQueryClient();
 
-    generationConfig: {
-      // maxOutputTokens: 100,
-    },
+  const chat = model.startChat({
+    history:
+      data?.history?.map(({ role, parts }) => ({
+        role,
+        parts: [{ text: parts[0]?.text }],
+      })) || [],
+    generationConfig: {},
   });
 
   const endRef = useRef(null);
@@ -37,17 +37,15 @@ const NewPrompt = ({ data }) => {
     endRef.current.scrollIntoView({ behavior: "smooth" });
   }, [data, question, answer, img.dbData]);
 
-  const queryClient = useQueryClient();
-
   const mutation = useMutation({
-    const { token } = useAuth();
-    mutationFn: () => {
+    mutationFn: async () => {
+      const token = await getToken(); 
       return fetch(`${import.meta.env.VITE_API_URL}/api/chats/${data._id}`, {
         method: "PUT",
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
-           Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`, 
         },
         body: JSON.stringify({
           question: question.length ? question : undefined,
@@ -57,75 +55,65 @@ const NewPrompt = ({ data }) => {
       }).then((res) => res.json());
     },
     onSuccess: () => {
-      queryClient
-        .invalidateQueries({ queryKey: ["chat", data._id] })
-        .then(() => {
-          formRef.current.reset();
-          setQuestion("");
-          setAnswer("");
-          setImg({
-            isLoading: false,
-            error: "",
-            dbData: {},
-            aiData: {},
-          });
-        });
+      queryClient.invalidateQueries({ queryKey: ["chat", data._id] }).then(() => {
+        formRef.current.reset();
+        setQuestion("");
+        setAnswer("");
+        setImg({ isLoading: false, error: "", dbData: {}, aiData: {} });
+      });
     },
     onError: (err) => {
-      console.log(err);
+      console.error(err);
     },
   });
+
   function delay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-  const add = async (text, isInitial) => {
-  if (!isInitial) setQuestion(text);
-
-  setAnswer("");
-
-  try {
-    const result = await chat.sendMessageStream(
-      Object.entries(img.aiData).length ? [img.aiData, text] : [text]
-    );
-
-    let accumulatedText = "";
-    for await (const chunk of result.stream) {
-      const chunkText = chunk.text();
-      accumulatedText += chunkText;
-      setAnswer(accumulatedText); 
-      await delay(5);
-    }
-    console.log(accumulatedText);
-    mutation.mutate();
-  } catch (err) {
-    console.log(err);
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
-};
+
+  const add = async (text, isInitial) => {
+    if (!isInitial) setQuestion(text);
+    setAnswer("");
+
+    try {
+      const result = await chat.sendMessageStream(
+        Object.entries(img.aiData).length ? [img.aiData, text] : [text]
+      );
+
+      let accumulatedText = "";
+      for await (const chunk of result.stream) {
+        const chunkText = chunk.text();
+        accumulatedText += chunkText;
+        setAnswer(accumulatedText);
+        await delay(5);
+      }
+
+      mutation.mutate();
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     const text = e.target.text.value;
     if (!text) return;
-
     add(text, false);
   };
 
   const hasRun = useRef(false);
-
   useEffect(() => {
     if (!hasRun.current) {
       if (data?.history?.length === 1) {
         add(data.history[0].parts[0].text, true);
       }
+      hasRun.current = true;
     }
-    hasRun.current = true;
   }, []);
 
   return (
     <>
-    
-      {img.isLoading && <div className="">Loading...</div>}
+      {img.isLoading && <div>Loading...</div>}
       {img.dbData?.filePath && (
         <IKImage
           urlEndpoint={import.meta.env.VITE_IMAGE_KIT_ENDPOINT}
