@@ -18,7 +18,7 @@ const NewPrompt = ({ data }) => {
     aiData: {},
   });
 
-  const { getToken } = useAuth(); 
+  const { getToken } = useAuth();
   const queryClient = useQueryClient();
 
   const chat = model.startChat({
@@ -38,21 +38,39 @@ const NewPrompt = ({ data }) => {
   }, [data, question, answer, img.dbData]);
 
   const mutation = useMutation({
-    mutationFn: async () => {
-      const token = await getToken(); 
-      return fetch(`${import.meta.env.VITE_API_URL}/api/chats/${data._id}`, {
-        method: "PUT",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`, 
-        },
-        body: JSON.stringify({
-          question: question.length ? question : undefined,
-          answer,
-          img: img.dbData?.filePath || undefined,
-        }),
-      }).then((res) => res.json());
+    // FIX 1: Accept arguments here
+    mutationFn: async ({ questionToSave, answerToSave }) => {
+      const token = await getToken();
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL}/api/chats/${data._id}`,
+        {
+          method: "PUT",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            // FIX 2: Use the arguments directly
+            question: questionToSave,
+            answer: answerToSave,
+            img: img.dbData?.filePath || undefined,
+          }),
+        }
+      );
+
+      // Handle server response errors
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || "Failed to update chat");
+      }
+
+      // Handle empty or non-JSON responses
+      const contentType = res.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        return res.json();
+      }
+      return null;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["chat", data._id] }).then(() => {
@@ -71,28 +89,32 @@ const NewPrompt = ({ data }) => {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
- const add = async (text, isInitial) => {
-  if (!isInitial) setQuestion(text);
-  setAnswer("");
+  const add = async (text, isInitial) => {
+    if (!isInitial) setQuestion(text);
+    setAnswer("");
 
-  try {
-    const result = await chat.sendMessageStream(
-      Object.entries(img.aiData).length ? [img.aiData, text] : [text]
-    );
+    try {
+      const result = await chat.sendMessageStream(
+        Object.entries(img.aiData).length ? [img.aiData, text] : [text]
+      );
 
-    let accumulatedText = "";
-    for await (const chunk of result.stream) {
-      accumulatedText += chunk.text();
-      setAnswer(accumulatedText);
+      let accumulatedText = "";
+      for await (const chunk of result.stream) {
+        accumulatedText += chunk.text();
+        setAnswer(accumulatedText);
+      }
+
+      if (data?._id) {
+        // FIX 3: Pass the variables directly to the mutation
+        mutation.mutate({
+          questionToSave: text,
+          answerToSave: accumulatedText,
+        });
+      }
+    } catch (err) {
+      console.error(err);
     }
-
-    if (data?._id) {
-      mutation.mutate(); // only if chat exists
-    }
-  } catch (err) {
-    console.error(err);
-  }
-};
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -109,7 +131,8 @@ const NewPrompt = ({ data }) => {
       }
       hasRun.current = true;
     }
-  }, []);
+    // FIX 4: Added 'data' to the dependency array
+  }, [data]);
 
   return (
     <>
