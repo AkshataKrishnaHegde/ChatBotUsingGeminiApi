@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import "./newPrompt.css";
-
 import Upload from "../upload/Upload";
 import { IKImage } from "imagekitio-react";
 import model from "../../lib/gemini";
@@ -20,7 +19,6 @@ const NewPrompt = ({ data }) => {
 
   const { getToken } = useAuth();
   const queryClient = useQueryClient();
-
   const chat = model.startChat({
     history:
       data?.history?.map(({ role, parts }) => ({
@@ -34,69 +32,51 @@ const NewPrompt = ({ data }) => {
   const formRef = useRef(null);
 
   useEffect(() => {
-    endRef.current.scrollIntoView({ behavior: "smooth" });
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [data, question, answer, img.dbData]);
 
+  // ✅ FIXED: Send correct keys ("question" and "answer")
   const mutation = useMutation({
-    // FIX 1: Accept arguments here
-    mutationFn: async ({ questionToSave, answerToSave }) => {
+    mutationFn: async ({ question, answer }) => {
       const token = await getToken();
-      const res = await fetch(
-        `${import.meta.env.VITE_API_URL}/api/chats/${data._id}`,
-        {
-          method: "PUT",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            // FIX 2: Use the arguments directly
-            question: questionToSave,
-            answer: answerToSave,
-            img: img.dbData?.filePath || undefined,
-          }),
-        }
-      );
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/chats/${data._id}`, {
+        method: "PUT",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          question,
+          answer,
+          img: img.dbData?.filePath || undefined,
+        }),
+      });
 
-      // Handle server response errors
       if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(errorText || "Failed to update chat");
+        const errText = await res.text();
+        throw new Error(errText || "Failed to update chat");
       }
 
-      // Handle empty or non-JSON responses
-      const contentType = res.headers.get("content-type");
-      if (contentType && contentType.includes("application/json")) {
-        return res.json();
-      }
-      return null;
+      return res.json().catch(() => null); // Handle empty JSON
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["chat", data._id] }).then(() => {
-        formRef.current.reset();
-        setQuestion("");
-        setAnswer("");
-        setImg({ isLoading: false, error: "", dbData: {}, aiData: {} });
-      });
+      queryClient.invalidateQueries({ queryKey: ["chat", data._id] });
+      formRef.current?.reset();
+      setQuestion("");
+      setAnswer("");
+      setImg({ isLoading: false, error: "", dbData: {}, aiData: {} });
     },
-    onError: (err) => {
-      console.error(err);
-    },
+    onError: (err) => console.error("Mutation error:", err.message),
   });
 
-  function delay(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  const add = async (text, isInitial) => {
+  const add = async (text, isInitial = false) => {
     if (!isInitial) setQuestion(text);
     setAnswer("");
 
     try {
-      const result = await chat.sendMessageStream(
-        Object.entries(img.aiData).length ? [img.aiData, text] : [text]
-      );
+      const inputData = Object.entries(img.aiData).length ? [img.aiData, text] : [text];
+      const result = await chat.sendMessageStream(inputData);
 
       let accumulatedText = "";
       for await (const chunk of result.stream) {
@@ -104,34 +84,27 @@ const NewPrompt = ({ data }) => {
         setAnswer(accumulatedText);
       }
 
-      if (data?._id) {
-        // FIX 3: Pass the variables directly to the mutation
-        mutation.mutate({
-          questionToSave: text,
-          answerToSave: accumulatedText,
-        });
-      }
+      // ✅ FIXED: send correct variable names
+      mutation.mutate({ question: text, answer: accumulatedText });
     } catch (err) {
-      console.error(err);
+      console.error("Chat error:", err);
+      setAnswer("Error generating answer.");
     }
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    const text = e.target.text.value;
+    const text = e.target.text.value.trim();
     if (!text) return;
     add(text, false);
   };
 
   const hasRun = useRef(false);
   useEffect(() => {
-    if (!hasRun.current) {
-      if (data?.history?.length === 1) {
-        add(data.history[0].parts[0].text, true);
-      }
+    if (!hasRun.current && data?.history?.length === 1) {
+      add(data.history[0].parts[0].text, true);
       hasRun.current = true;
     }
-    // FIX 4: Added 'data' to the dependency array
   }, [data]);
 
   return (
@@ -156,8 +129,8 @@ const NewPrompt = ({ data }) => {
         <Upload setImg={setImg} />
         <input id="file" type="file" multiple={false} hidden />
         <input type="text" name="text" placeholder="Ask anything..." />
-        <button>
-          <img src="/arrow.png" alt="" />
+        <button type="submit">
+          <img src="/arrow.png" alt="send" />
         </button>
       </form>
     </>
